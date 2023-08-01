@@ -1,11 +1,7 @@
 import JSZip from 'jszip';
 import log from './log';
 
-/**
- * Deletes all data created by the old and buggy version of restore points.
- * Old data is simply not worth migrating, especially as accessing this data is prone to cause crashes
- * to due indexed DB not handling large data very well.
- */
+// TODO
 const deleteLegacyData = () => {
     try {
         if (typeof indexedDB !== 'undefined') {
@@ -18,11 +14,11 @@ const deleteLegacyData = () => {
         log.error('Error deleting legacy restore point data', e);
     }
 };
-deleteLegacyData();
+// deleteLegacyData();
 
 /**
  * @typedef Manifest
- * @property {{id: string; title: string; assets: string[]}[]} restorePoints
+ * @property {{id: string; title: string; assets: string[]; created: number}[]} restorePoints
  */
 
 /*
@@ -46,6 +42,8 @@ const ASSET_DIRECTORY = 'assets';
 const MAX_RESTORE_POINTS = 5;
 
 const uniques = arr => Array.from(new Set(arr));
+
+const isSupported = !!navigator.storage && !!navigator.storage.getDirectory;
 
 const getDirectories = async () => {
     const root = await navigator.storage.getDirectory();
@@ -134,6 +132,7 @@ const readFile = async (directory, filename) => {
 const isValidManifest = obj => Array.isArray(obj.restorePoints) && obj.restorePoints.every(point => (
     typeof point.id === 'string' &&
     typeof point.title === 'string' &&
+    typeof point.created === 'number' &&
     Array.isArray(point.assets) &&
     point.assets.every(asset => typeof asset === 'string')
 ));
@@ -200,7 +199,7 @@ const removeExtraneous = async manifest => {
 const createRestorePoint = async (vm, title) => {
     const directories = await getDirectories();
 
-    const id = `${Date.now()}-${Math.round(Math.random() * 1000)}`;
+    const id = `${Date.now()}-${Math.round(Math.random() * 1e5)}`;
 
     /** @type {Record<string, Uint8Array>} */
     const projectFiles = vm.saveProjectSb3DontZip();
@@ -210,6 +209,7 @@ const createRestorePoint = async (vm, title) => {
     manifest.restorePoints.unshift({
         id,
         title,
+        created: Math.round(Date.now() / 1000),
         assets: projectAssets
     });
     while (manifest.restorePoints.length > MAX_RESTORE_POINTS) {
@@ -243,13 +243,25 @@ const deleteRestorePoint = async id => {
 
 const deleteAllRestorePoints = async () => {
     const directories = await getDirectories();
-    await directories.root.removeEntry(MANIFEST_NAME);
-    await directories.root.removeEntry(PROJECT_DIRECTORY, {
-        recursive: true
-    });
-    await directories.root.removeEntry(ASSET_DIRECTORY, {
-        recursive: true
-    });
+    try {
+        await directories.root.removeEntry(MANIFEST_NAME);
+    } catch (e) {
+        // ignore
+    }
+    try {
+        await directories.root.removeEntry(PROJECT_DIRECTORY, {
+            recursive: true
+        });
+    } catch (e) {
+        // ignore
+    }
+    try {
+        await directories.root.removeEntry(ASSET_DIRECTORY, {
+            recursive: true
+        });
+    } catch (e) {
+        // ignore
+    }
 };
 
 /**
@@ -275,6 +287,7 @@ const loadRestorePoint = async id => {
 };
 
 export default {
+    isSupported,
     readManifest,
     createRestorePoint,
     deleteRestorePoint,

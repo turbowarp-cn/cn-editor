@@ -8,6 +8,7 @@ import {LoadingStates, getIsShowingProject, onLoadedProject, requestProjectUploa
 import {setFileHandle} from '../reducers/tw';
 import TWRestorePointModal from '../components/tw-restore-point-modal/restore-point-modal.jsx';
 import RestorePointAPI from '../lib/tw-restore-point-api';
+import log from '../lib/log';
 
 const AUTOMATIC_INTERVAL = 1000 * 5;
 
@@ -36,8 +37,10 @@ class TWRestorePointManager extends React.Component {
 
     componentDidUpdate (prevProps) {
         if (
-            this.props.projectChanged !== prevProps.projectChanged ||
-            this.props.isShowingProject !== prevProps.isShowingProject
+            RestorePointAPI.isSupported && (
+                this.props.projectChanged !== prevProps.projectChanged ||
+                this.props.isShowingProject !== prevProps.isShowingProject
+            )
         ) {
             if (this.props.projectChanged && this.props.isShowingProject) {
                 // Project was modified
@@ -57,30 +60,33 @@ class TWRestorePointManager extends React.Component {
     }
 
     handleClickCreate () {
-        this.setState({
-            loading: true
-        });
-        this.createRestorePoint().then(() => {
-            this.refreshState();
-        });
+        this.createRestorePoint();
     }
 
     handleClickDelete (id) {
         this.setState({
             loading: true
         });
-        RestorePointAPI.deleteRestorePoint(id).then(() => {
-            this.refreshState();
-        });
+        RestorePointAPI.deleteRestorePoint(id)
+            .then(() => {
+                this.refreshState();
+            })
+            .catch(error => {
+                this.handleError(error);
+            });
     }
 
     handleClickDeleteAll () {
         this.setState({
             loading: true
         });
-        RestorePointAPI.deleteAllRestorePoints().then(() => {
-            this.refreshState();
-        });
+        RestorePointAPI.deleteAllRestorePoints()
+            .then(() => {
+                this.refreshState();
+            })
+            .catch(error => {
+                this.handleError(error);
+            });
     }
 
     handleClickLoad (id) {
@@ -92,9 +98,7 @@ class TWRestorePointManager extends React.Component {
                 this.props.onFinishLoadingRestorePoint(true, this.props.loadingState);
             })
             .catch(error => {
-                // eslint-disable-next-line no-alert
-                alert(error);
-
+                this.handleError(error);
                 this.props.onFinishLoadingRestorePoint(false, this.props.loadingState);
             });
     }
@@ -105,7 +109,7 @@ class TWRestorePointManager extends React.Component {
                 this.timeout = null;
 
                 if (this.props.projectChanged && this.props.isShowingProject) {
-                    // Still not saved
+                    // Project is still not saved
                     this.queueRestorePoint();
                 }
             });
@@ -113,18 +117,33 @@ class TWRestorePointManager extends React.Component {
     }
 
     createRestorePoint () {
+        if (this.props.isModalVisible) {
+            this.setState({
+                loading: true
+            });
+        }
+
         this.props.onStartCreatingRestorePoint();
         return RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle)
             .then(() => {
+                if (this.props.isModalVisible) {
+                    this.refreshState();
+                }
+
                 this.props.onFinishCreatingRestorePoint();
+            })
+            .catch(error => {
+                this.handleError(error);
             });
     }
 
     refreshState () {
+        if (this.state.error) {
+            return;
+        }
         this.setState({
             loading: true,
-            restorePoints: [],
-            error: null
+            restorePoints: []
         });
         RestorePointAPI.readManifest()
             .then(manifest => {
@@ -134,11 +153,22 @@ class TWRestorePointManager extends React.Component {
                 });
             })
             .catch(error => {
-                this.setState({
-                    loading: false,
-                    error
-                });
+                this.handleError(error);
             });
+    }
+
+    handleError (error) {
+        log.error('restore point error', error);
+        this.setState({
+            error: `${error}`
+        });
+        clearTimeout(this.timeout);
+
+        if (!this.props.isModalVisible) {
+            // TODO
+            // eslint-disable-next-line no-alert
+            alert(`${error}`);
+        }
     }
 
     render () {
@@ -150,6 +180,7 @@ class TWRestorePointManager extends React.Component {
                     onClickDelete={this.handleClickDelete}
                     onClickDeleteAll={this.handleClickDeleteAll}
                     onClickLoad={this.handleClickLoad}
+                    isSupported={RestorePointAPI.isSupported}
                     isLoading={this.state.loading}
                     restorePoints={this.state.restorePoints}
                     error={this.state.error}
