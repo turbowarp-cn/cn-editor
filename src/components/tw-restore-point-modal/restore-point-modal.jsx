@@ -26,6 +26,20 @@ const RestorePointModal = props => (
         <div className={styles.body}>
             {props.isSupported ? (
                 <div>
+                    <div className={styles.legacyTransition}>
+                        {/* Don't translate -- this will be removed before it can be meaningfully translated */}
+                        <span>
+                            {/* eslint-disable-next-line max-len */}
+                            {'Restore points have been rewritten. If your project is not listed below, try loading the old restore point instead:'}
+                        </span>
+                        <button
+                            className={classNames(styles.button, styles.loadLegacyButton)}
+                            onClick={props.onClickLoadLegacy}
+                        >
+                            {'Load Old'}
+                        </button>
+                    </div>
+
                     <p>
                         <FormattedMessage
                             // eslint-disable-next-line max-len
@@ -124,6 +138,7 @@ RestorePointModal.propTypes = {
     onClickDelete: PropTypes.func.isRequired,
     onClickDeleteAll: PropTypes.func.isRequired,
     onClickLoad: PropTypes.func.isRequired,
+    onClickLoadLegacy: PropTypes.func.isRequired,
     isSupported: PropTypes.bool.isRequired,
     isLoading: PropTypes.bool.isRequired,
     restorePoints: PropTypes.arrayOf(PropTypes.shape({})),

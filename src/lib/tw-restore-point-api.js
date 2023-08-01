@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
-import log from './log';
 
 // TODO
+/*
 const deleteLegacyData = () => {
     try {
         if (typeof indexedDB !== 'undefined') {
@@ -14,7 +14,8 @@ const deleteLegacyData = () => {
         log.error('Error deleting legacy restore point data', e);
     }
 };
-// deleteLegacyData();
+deleteLegacyData();
+*/
 
 /**
  * @typedef Manifest
@@ -39,29 +40,32 @@ const ROOT_DIRECTORY = 'tw-restore-points-v2';
 const MANIFEST_NAME = 'restore-points.json';
 const PROJECT_DIRECTORY = 'projects';
 const ASSET_DIRECTORY = 'assets';
+
 const MAX_RESTORE_POINTS = 5;
 
 const uniques = arr => Array.from(new Set(arr));
 
 const isSupported = !!navigator.storage && !!navigator.storage.getDirectory;
 
-const getDirectories = async () => {
+/**
+ * @returns {Promise<FileSystemDirectoryHandle>} The root directory to store all restore point data in.
+ */
+const getRootDirectory = async () => {
     const root = await navigator.storage.getDirectory();
     const subdirectory = await root.getDirectoryHandle(ROOT_DIRECTORY, {
         create: true
     });
-    const projects = await subdirectory.getDirectoryHandle(PROJECT_DIRECTORY, {
-        create: true
-    });
-    const assets = await subdirectory.getDirectoryHandle(ASSET_DIRECTORY, {
-        create: true
-    });
-    return {
-        root: subdirectory,
-        projects,
-        assets
-    };
+    return subdirectory;
 };
+
+/**
+ * @param {FileSystemDirectoryHandle} root root
+ * @param {string} directoryName name of the directory
+ * @returns {Promise<FileSystemDirectoryHandle>} project directory
+ */
+const getDirectory = (root, directoryName) => root.getDirectoryHandle(directoryName, {
+    create: true
+});
 
 /**
  * @param {FileSystemDirectoryHandle} directory the directory
@@ -94,28 +98,6 @@ const readDirectory = directory => new Promise((resolve, reject) => {
 
 /**
  * @param {FileSystemDirectoryHandle} directory the directory
- * @param {string} name the name of the file
- * @param {Uint8Array} data the contents to write
- */
-const writeToFile = async (directory, name, data) => {
-    const fileHandle = await directory.getFileHandle(name, {
-        create: true
-    });
-    const writable = await fileHandle.createWritable();
-    await writable.write(data);
-    await writable.close();
-};
-
-/**
- * @param {FileSystemDirectoryHandle} directory the directory
- * @param {string} name the name of the file
- */
-const deleteFile = async (directory, name) => {
-    await directory.removeEntry(name);
-};
-
-/**
- * @param {FileSystemDirectoryHandle} directory the directory
  * @param {string} filename the name of the file
  * @returns {Promise<File>} file object
  */
@@ -126,36 +108,69 @@ const readFile = async (directory, filename) => {
 };
 
 /**
- * @param {Manifest} obj unknown object
- * @returns {boolean} true if obj is manifest
+ * @param {FileSystemDirectoryHandle} directory the directory
+ * @param {string} filename the name of the file
+ * @param {Uint8Array} data the contents to write
  */
-const isValidManifest = obj => Array.isArray(obj.restorePoints) && obj.restorePoints.every(point => (
-    typeof point.id === 'string' &&
-    typeof point.title === 'string' &&
-    typeof point.created === 'number' &&
-    Array.isArray(point.assets) &&
-    point.assets.every(asset => typeof asset === 'string')
-));
+const writeFile = async (directory, filename, data) => {
+    const fileHandle = await directory.getFileHandle(filename, {
+        create: true
+    });
+    const writable = await fileHandle.createWritable();
+    await writable.write(data);
+    await writable.close();
+};
+
+/**
+ * @param {FileSystemDirectoryHandle} directory the directory
+ * @param {string} name the name of the file or directory to delete
+ */
+const deleteEntry = async (directory, name) => {
+    try {
+        await directory.removeEntry(name, {
+            recursive: true
+        });
+    } catch (e) {
+        if (e.name === 'NotFoundError') {
+            // already deleted, can ignore
+        } else {
+            throw e;
+        }
+    }
+};
+
+/**
+ * @param {Manifest} obj unknown object
+ * @returns {Manifest} parsed manifest, known good format
+ */
+const parseManifest = obj => {
+    const parsed = {
+        restorePoints: Array.isArray(obj.restorePoints) ? obj.restorePoints : []
+    };
+    parsed.restorePoints = parsed.restorePoints.filter(point => (
+        typeof point.id === 'string' &&
+        typeof point.title === 'string' &&
+        typeof point.created === 'number' &&
+        Array.isArray(point.assets) &&
+        point.assets.every(asset => typeof asset === 'string')
+    ));
+    return parsed;
+};
 
 /**
  * @param {FileSystemDirectoryHandle} root the root restore point directory
  * @returns {Promise<Manifest>} Parsed or default manifest
  */
-const readManifest = async () => {
+const readManifest = async root => {
     try {
-        const directories = await getDirectories();
-        const file = await readFile(directories.root, MANIFEST_NAME);
+        const file = await readFile(root, MANIFEST_NAME);
         const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (isValidManifest(parsed)) {
-            return parsed;
-        }
+        const json = JSON.parse(text);
+        return parseManifest(json);
     } catch (e) {
         // ignore
     }
-    return {
-        restorePoints: []
-    };
+    return parseManifest({});
 };
 
 /**
@@ -172,23 +187,27 @@ const writeManifest = async (root, manifest) => {
 };
 
 /**
+ * @param {FileSystemDirectoryEntry} root the root directory
  * @param {Manifest} manifest the manifest
  */
-const removeExtraneous = async manifest => {
-    const directories = await getDirectories();
+const removeExtraneousFiles = async (root, manifest) => {
+    const projectRoot = await getDirectory(root, PROJECT_DIRECTORY);
+    const assetRoot = await getDirectory(root, ASSET_DIRECTORY);
 
     const expectedProjectFiles = manifest.restorePoints.map(i => `${i.id}.json`);
-    const allSavedProjects = await readDirectory(directories.projects);
-    const projectFilesToDelete = allSavedProjects.filter(i => !expectedProjectFiles.includes(i));
-    for (const projectFile of projectFilesToDelete) {
-        await deleteFile(directories.projects, projectFile);
+    const allSavedProjects = await readDirectory(projectRoot);
+    for (const projectFile of allSavedProjects) {
+        if (!expectedProjectFiles.includes(projectFile)) {
+            await deleteEntry(projectRoot, projectFile);
+        }
     }
 
     const expectedAssetFiles = uniques(manifest.restorePoints.map(i => i.assets).flat());
-    const allSavedAssets = await readDirectory(directories.assets);
-    const assetsToDelete = allSavedAssets.filter(i => !expectedAssetFiles.includes(i));
-    for (const assetName of assetsToDelete) {
-        await deleteFile(directories.assets, assetName);
+    const allSavedAssets = await readDirectory(assetRoot);
+    for (const assetName of allSavedAssets) {
+        if (!expectedAssetFiles.includes(assetName)) {
+            await deleteEntry(assetRoot, assetName);
+        }
     }
 };
 
@@ -197,71 +216,67 @@ const removeExtraneous = async manifest => {
  * @param {string} title project title
  */
 const createRestorePoint = async (vm, title) => {
-    const directories = await getDirectories();
+    const root = await getRootDirectory();
+    const projectRoot = await getDirectory(root, PROJECT_DIRECTORY);
+    const assetRoot = await getDirectory(root, ASSET_DIRECTORY);
 
     const id = `${Date.now()}-${Math.round(Math.random() * 1e5)}`;
 
     /** @type {Record<string, Uint8Array>} */
     const projectFiles = vm.saveProjectSb3DontZip();
-    const projectAssets = Object.keys(projectFiles).filter(i => i !== 'project.json');
+    const projectAssetNames = Object.keys(projectFiles).filter(i => i !== 'project.json');
 
-    const manifest = await readManifest(directories.root);
+    // There's no guarantee that this code will finish all the way, so the order *does* matter.
+    // The lack of significant parallelization is also intentional as we don't want to slam the
+    // browser with massive amounts of data all at once, which could increase memory usage and
+    // eventually causes crashes and data loss.
+
+    // Updating manifest must happen first, otherwise this restore point will never be recognized.
+    const manifest = await readManifest(root);
     manifest.restorePoints.unshift({
         id,
         title,
         created: Math.round(Date.now() / 1000),
-        assets: projectAssets
+        assets: projectAssetNames
     });
     while (manifest.restorePoints.length > MAX_RESTORE_POINTS) {
         manifest.restorePoints.pop();
     }
-    await writeManifest(directories.root, manifest);
+    await writeManifest(root, manifest);
 
+    // Scripts are the next most important thing -- without this the assets can't be loaded.
     const jsonData = projectFiles['project.json'];
-    await writeToFile(directories.projects, `${id}.json`, jsonData);
+    await writeFile(projectRoot, `${id}.json`, jsonData);
 
-    const alreadySavedAssets = await readDirectory(directories.assets);
-    const assetsToSave = projectAssets.filter(asset => !alreadySavedAssets.includes(asset));
-    for (const assetName of assetsToSave) {
-        const data = projectFiles[assetName];
-        await writeToFile(directories.assets, assetName, data);
+    // Assets are saved next in the order the VM gives us, which we trust to be logical.
+    const alreadySavedAssets = await readDirectory(assetRoot);
+    for (const assetName of projectAssetNames) {
+        if (!alreadySavedAssets.includes(assetName)) {
+            const data = projectFiles[assetName];
+            await writeFile(assetRoot, assetName, data);
+        }
     }
 
-    await removeExtraneous(manifest);
+    // Removing old data is the last priority
+    await removeExtraneousFiles(root, manifest);
 };
 
 /**
  * @param {string} id the restore point's ID
  */
 const deleteRestorePoint = async id => {
-    const directories = await getDirectories();
-    const manifest = await readManifest(id);
+    const root = await getRootDirectory();
+    const manifest = await readManifest(root);
     manifest.restorePoints = manifest.restorePoints.filter(i => i.id !== id);
-    await writeManifest(directories.root, manifest);
-    await removeExtraneous(manifest);
+    await writeManifest(root, manifest);
+    await removeExtraneousFiles(root, manifest);
 };
 
 const deleteAllRestorePoints = async () => {
-    const directories = await getDirectories();
-    try {
-        await directories.root.removeEntry(MANIFEST_NAME);
-    } catch (e) {
-        // ignore
-    }
-    try {
-        await directories.root.removeEntry(PROJECT_DIRECTORY, {
-            recursive: true
-        });
-    } catch (e) {
-        // ignore
-    }
-    try {
-        await directories.root.removeEntry(ASSET_DIRECTORY, {
-            recursive: true
-        });
-    } catch (e) {
-        // ignore
-    }
+    const root = await getRootDirectory();
+    await deleteEntry(root, MANIFEST_NAME);
+    await deleteEntry(root, PROJECT_DIRECTORY);
+    await deleteEntry(root, ASSET_DIRECTORY);
 };
 
 /**
@@ -269,28 +284,86 @@ const deleteAllRestorePoints = async () => {
  * @returns {Promise<ArrayBuffer>} sb3 file
  */
 const loadRestorePoint = async id => {
-    const directories = await getDirectories();
-    const manifest = await readManifest(directories.root);
+    const root = await getRootDirectory();
+    const projectRoot = await getDirectory(root, PROJECT_DIRECTORY);
+    const assetRoot = await getDirectory(root, ASSET_DIRECTORY);
+
+    const manifest = await readManifest(root);
     const manifestEntry = manifest.restorePoints.find(i => i.id === id);
 
     const zip = new JSZip();
-    const projectFile = await readFile(directories.projects, `${id}.json`);
+    const projectFile = await readFile(projectRoot, `${id}.json`);
     zip.file('project.json', projectFile);
     for (const asset of manifestEntry.assets) {
-        zip.file(asset, await readFile(directories.assets, asset));
+        zip.file(asset, await readFile(assetRoot, asset));
     }
 
     return zip.generateAsync({
-        // no reason to spend time compresing it
+        // no reason to spend time compresing the zip since it will immediately be decompressed
         type: 'arraybuffer'
     });
 };
 
+const getAllRestorePoints = async () => {
+    const root = await getRootDirectory();
+    const manifest = await readManifest(root);
+    return manifest.restorePoints;
+};
+
+const loadLegacyRestorePoint = () => new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+        reject(new Error('indexedDB not supported'));
+        return;
+    }
+
+    const DATABASE_NAME = 'TW_AutoSave';
+    const DATABASE_VERSION = 1;
+    const STORE_NAME = 'project';
+
+    const openRequest = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    openRequest.onerror = () => {
+        reject(new Error(`Error opening DB: ${openRequest.error}`));
+    };
+    openRequest.onsuccess = () => {
+        const db = openRequest.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+            reject(new Error('Object store does not exist'));
+            return;
+        }
+
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        transaction.onerror = () => {
+            reject(new Error(`Transaction error: ${transaction.error}`));
+        };
+
+        const zip = new JSZip();
+        const projectStore = transaction.objectStore(STORE_NAME);
+        const cursorRequest = projectStore.openCursor();
+        cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (cursor) {
+                zip.file(cursor.key, cursor.value.data);
+                cursor.continue();
+            } else {
+                const hasJSON = !!zip.file('project.json');
+                if (hasJSON) {
+                    resolve(zip.generateAsync({
+                        type: 'arraybuffer'
+                    }));
+                } else {
+                    reject(new Error('Could not find project.json'));
+                }
+            }
+        };
+    };
+});
+
 export default {
     isSupported,
-    readManifest,
+    getAllRestorePoints,
     createRestorePoint,
     deleteRestorePoint,
     deleteAllRestorePoints,
-    loadRestorePoint
+    loadRestorePoint,
+    loadLegacyRestorePoint
 };

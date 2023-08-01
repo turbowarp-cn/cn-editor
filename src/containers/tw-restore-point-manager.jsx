@@ -1,5 +1,6 @@
 import React from 'react';
 import {connect} from 'react-redux';
+import {intlShape, injectIntl, defineMessages} from 'react-intl';
 import PropTypes from 'prop-types';
 import bindAll from 'lodash.bindall';
 import {closeAlertWithId, showStandardAlert} from '../reducers/alerts';
@@ -10,7 +11,28 @@ import TWRestorePointModal from '../components/tw-restore-point-modal/restore-po
 import RestorePointAPI from '../lib/tw-restore-point-api';
 import log from '../lib/log';
 
-const AUTOMATIC_INTERVAL = 1000 * 5;
+/* eslint-disable no-alert */
+
+const AUTOMATIC_INTERVAL = 1000 * 5; // TODO: increase this when testing is done
+const MINIMUM_SAVE_TIME = 500;
+
+const messages = defineMessages({
+    confirmLoad: {
+        defaultMessage: 'Replace existing project?',
+        description: 'Confirmation that appears when loading a restore point to confirm overwriting unsaved changes.',
+        id: 'tw.restorePoints.confirmLoad'
+    },
+    confirmDelete: {
+        defaultMessage: 'Are you sure you want to delete "{projectTitle}"? This cannot be undone.',
+        description: 'Confirmation that appears when deleting a restore poinnt',
+        id: 'tw.restorePoints.confirmDelete'
+    },
+    confirmDeleteAll: {
+        defaultMessage: 'Are you sure you want to delete ALL restore points? This cannot be undone.',
+        description: 'Confirmation that appears when deleting ALL restore points.',
+        id: 'tw.restorePoints.confirmDeleteAll'
+    }
+});
 
 class TWRestorePointManager extends React.Component {
     constructor (props) {
@@ -19,7 +41,8 @@ class TWRestorePointManager extends React.Component {
             'handleClickCreate',
             'handleClickDelete',
             'handleClickDeleteAll',
-            'handleClickLoad'
+            'handleClickLoad',
+            'handleClickLoadLegacy'
         ]);
         this.state = {
             loading: true,
@@ -32,6 +55,10 @@ class TWRestorePointManager extends React.Component {
     componentWillReceiveProps (nextProps) {
         if (nextProps.isModalVisible && !this.props.isModalVisible) {
             this.refreshState();
+        } else if (!nextProps.isModalVisible && this.props.isModalVisible) {
+            this.setState({
+                restorePoints: []
+            });
         }
     }
 
@@ -64,6 +91,11 @@ class TWRestorePointManager extends React.Component {
     }
 
     handleClickDelete (id) {
+        const projectTitle = this.state.restorePoints.find(i => i.id === id).title;
+        if (!confirm(this.props.intl.formatMessage(messages.confirmDelete, {projectTitle}))) {
+            return;
+        }
+
         this.setState({
             loading: true
         });
@@ -77,6 +109,10 @@ class TWRestorePointManager extends React.Component {
     }
 
     handleClickDeleteAll () {
+        if (!confirm(this.props.intl.formatMessage(messages.confirmDeleteAll))) {
+            return;
+        }
+
         this.setState({
             loading: true
         });
@@ -89,17 +125,45 @@ class TWRestorePointManager extends React.Component {
             });
     }
 
-    handleClickLoad (id) {
+    _startLoading () {
         this.props.onCloseModal();
         this.props.onStartLoadingRestorePoint(this.props.loadingState);
+    }
+
+    _finishLoading (success) {
+        this.props.onFinishLoadingRestorePoint(success, this.props.loadingState);
+    }
+
+    handleClickLoad (id) {
+        if (this.props.projectChanged && !confirm(this.props.intl.formatMessage(messages.confirmLoad))) {
+            return;
+        }
+        this._startLoading();
         RestorePointAPI.loadRestorePoint(id)
             .then(buffer => this.props.vm.loadProject(buffer))
             .then(() => {
-                this.props.onFinishLoadingRestorePoint(true, this.props.loadingState);
+                this._finishLoading(true);
             })
             .catch(error => {
                 this.handleError(error);
-                this.props.onFinishLoadingRestorePoint(false, this.props.loadingState);
+                this._finishLoading(false);
+            });
+    }
+
+    handleClickLoadLegacy () {
+        if (this.props.projectChanged && !confirm(this.props.intl.formatMessage(messages.confirmLoad))) {
+            return;
+        }
+        this._startLoading();
+        RestorePointAPI.loadLegacyRestorePoint()
+            .then(buffer => this.props.vm.loadProject(buffer))
+            .then(() => {
+                this._finishLoading(true);
+            })
+            .catch(error => {
+                // Don't handleError on this because we're expecting error 90% of the time
+                alert(error);
+                this._finishLoading(false);
             });
     }
 
@@ -124,7 +188,14 @@ class TWRestorePointManager extends React.Component {
         }
 
         this.props.onStartCreatingRestorePoint();
-        return RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle)
+        return Promise.all([
+            RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle),
+
+            // Force saves to not be instant so people can see that we're making a restore point
+            // It also makes refreshes less likely to cause accidental clicks in the modal
+            // TODO: is this actually a good idea?
+            new Promise(resolve => setTimeout(resolve, MINIMUM_SAVE_TIME))
+        ])
             .then(() => {
                 if (this.props.isModalVisible) {
                     this.refreshState();
@@ -145,11 +216,11 @@ class TWRestorePointManager extends React.Component {
             loading: true,
             restorePoints: []
         });
-        RestorePointAPI.readManifest()
-            .then(manifest => {
+        RestorePointAPI.getAllRestorePoints()
+            .then(restorePoints => {
                 this.setState({
                     loading: false,
-                    restorePoints: manifest.restorePoints
+                    restorePoints
                 });
             })
             .catch(error => {
@@ -166,7 +237,6 @@ class TWRestorePointManager extends React.Component {
 
         if (!this.props.isModalVisible) {
             // TODO
-            // eslint-disable-next-line no-alert
             alert(`${error}`);
         }
     }
@@ -180,6 +250,7 @@ class TWRestorePointManager extends React.Component {
                     onClickDelete={this.handleClickDelete}
                     onClickDeleteAll={this.handleClickDeleteAll}
                     onClickLoad={this.handleClickLoad}
+                    onClickLoadLegacy={this.handleClickLoadLegacy}
                     isSupported={RestorePointAPI.isSupported}
                     isLoading={this.state.loading}
                     restorePoints={this.state.restorePoints}
@@ -192,6 +263,7 @@ class TWRestorePointManager extends React.Component {
 }
 
 TWRestorePointManager.propTypes = {
+    intl: intlShape,
     projectChanged: PropTypes.bool.isRequired,
     projectTitle: PropTypes.string.isRequired,
     onStartCreatingRestorePoint: PropTypes.func.isRequired,
@@ -231,7 +303,7 @@ const mapDispatchToProps = dispatch => ({
     onCloseModal: () => dispatch(closeRestorePointModal())
 });
 
-export default connect(
+export default injectIntl(connect(
     mapStateToProps,
     mapDispatchToProps
-)(TWRestorePointManager);
+)(TWRestorePointManager));

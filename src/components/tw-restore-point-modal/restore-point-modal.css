@@ -105,3 +105,19 @@
 .delete-button:hover {
     background-color: $ui-black-transparent;
 }
+
+.legacy-transition {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    background-color: rgba(128, 0, 128, 0.18);
+    border: 1px solid rgba(128, 0, 128, 0.568);
+    text-align: center;
+    font-weight: bold;
+}
+.load-legacy-button {
+    margin-left: 1rem;
+    background-color: $pen-primary;
+}
