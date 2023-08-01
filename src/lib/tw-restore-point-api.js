@@ -116,7 +116,10 @@ const writeFile = async (directory, filename, data) => {
     const fileHandle = await directory.getFileHandle(filename, {
         create: true
     });
-    const writable = await fileHandle.createWritable();
+    const writable = await fileHandle.createWritable({
+        // TODO: Firefox seems to not do this by default?
+        keepExistingData: false
+    });
     await writable.write(data);
     await writable.close();
 };
