@@ -185,13 +185,13 @@ const alerts = [
         level: AlertLevels.INFO
     },
     {
-        alertId: 'twAutosaving',
+        alertId: 'twCreatingRestorePoint',
         alertType: AlertTypes.INLINE,
         content: (
             <FormattedMessage
                 defaultMessage="Creating restore point…"
-                description="Message indicating that a restore point is being created"
-                id="tw.alerts.autosaving"
+                description="Message indicating that a restore point is being automatically created"
+                id="tw.alerts.creatingRestorePoint"
             />
         ),
         iconSpinner: true,
