@@ -64,10 +64,8 @@ class TWRestorePointManager extends React.Component {
 
     componentDidUpdate (prevProps) {
         if (
-            RestorePointAPI.isSupported && (
-                this.props.projectChanged !== prevProps.projectChanged ||
-                this.props.isShowingProject !== prevProps.isShowingProject
-            )
+            this.props.projectChanged !== prevProps.projectChanged ||
+            this.props.isShowingProject !== prevProps.isShowingProject
         ) {
             if (this.props.projectChanged && this.props.isShowingProject) {
                 // Project was modified
@@ -251,7 +249,6 @@ class TWRestorePointManager extends React.Component {
                     onClickDeleteAll={this.handleClickDeleteAll}
                     onClickLoad={this.handleClickLoad}
                     onClickLoadLegacy={this.handleClickLoadLegacy}
-                    isSupported={RestorePointAPI.isSupported}
                     isLoading={this.state.loading}
                     restorePoints={this.state.restorePoints}
                     error={this.state.error}

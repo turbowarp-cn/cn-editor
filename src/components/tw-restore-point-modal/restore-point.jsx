@@ -61,7 +61,7 @@ class RestorePoint extends React.Component {
 }
 
 RestorePoint.propTypes = {
-    id: PropTypes.string.isRequired,
+    id: PropTypes.number.isRequired,
     title: PropTypes.string.isRequired,
     assets: PropTypes.arrayOf(PropTypes.string.isRequired).isRequired,
     created: PropTypes.number.isRequired,
