@@ -85,7 +85,10 @@ class TWRestorePointManager extends React.Component {
     }
 
     handleClickCreate () {
-        this.createRestorePoint(RestorePointAPI.TYPE_MANUAL);
+        this.createRestorePoint(RestorePointAPI.TYPE_MANUAL)
+            .catch(error => {
+                this.handleModalError(error);
+            });
     }
 
     handleClickDelete (id) {
@@ -102,7 +105,7 @@ class TWRestorePointManager extends React.Component {
                 this.refreshState();
             })
             .catch(error => {
-                this.handleError(error);
+                this.handleModalError(error);
             });
     }
 
@@ -119,7 +122,7 @@ class TWRestorePointManager extends React.Component {
                 this.refreshState();
             })
             .catch(error => {
-                this.handleError(error);
+                this.handleModalError(error);
             });
     }
 
@@ -143,7 +146,7 @@ class TWRestorePointManager extends React.Component {
                 this._finishLoading(true);
             })
             .catch(error => {
-                this.handleError(error);
+                this.handleModalError(error);
                 this._finishLoading(false);
             });
     }
@@ -192,7 +195,6 @@ class TWRestorePointManager extends React.Component {
 
             // Force saves to not be instant so people can see that we're making a restore point
             // It also makes refreshes less likely to cause accidental clicks in the modal
-            // TODO: is this actually a good idea?
             new Promise(resolve => setTimeout(resolve, MINIMUM_SAVE_TIME))
         ])
             .then(() => {
@@ -201,18 +203,13 @@ class TWRestorePointManager extends React.Component {
                 }
 
                 this.props.onFinishCreatingRestorePoint();
-            })
-            .catch(error => {
-                this.handleError(error);
             });
     }
 
     refreshState () {
-        if (this.state.error) {
-            return;
-        }
         this.setState({
             loading: true,
+            error: null,
             restorePoints: []
         });
         RestorePointAPI.getAllRestorePoints()
@@ -223,21 +220,15 @@ class TWRestorePointManager extends React.Component {
                 });
             })
             .catch(error => {
-                this.handleError(error);
+                this.handleModalError(error);
             });
     }
 
-    handleError (error) {
-        log.error('restore point error', error);
+    handleModalError (error) {
+        log.error('Restore point error', error);
         this.setState({
             error: `${error}`
         });
-        clearTimeout(this.timeout);
-
-        if (!this.props.isModalVisible) {
-            // TODO
-            alert(`${error}`);
-        }
     }
 
     render () {

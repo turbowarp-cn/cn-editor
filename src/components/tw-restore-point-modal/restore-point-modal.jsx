@@ -40,7 +40,7 @@ const RestorePointModal = props => (
             <p>
                 <FormattedMessage
                     // eslint-disable-next-line max-len
-                    defaultMessage="{APP_NAME} periodically creates restore points to help recover your project if you forget to save. This is intended as a last resort for recovery. Your computer may silently delete these restore points at any time. Do not save projects here."
+                    defaultMessage="{APP_NAME} periodically creates restore points to help recover your project if you forget to save. This is intended as a last resort for recovery. Your computer may silently delete these restore points at any time. Do not rely on this feature."
                     id="tw.restorePoints.description"
                     values={{
                         APP_NAME: APP_NAME
@@ -52,7 +52,7 @@ const RestorePointModal = props => (
                 <button
                     onClick={props.onClickCreate}
                     className={classNames(styles.button, styles.createButton)}
-                    disabled={props.isLoading || props.error}
+                    disabled={props.isLoading}
                 >
                     <FormattedMessage
                         defaultMessage="Create Restore Point"
@@ -63,7 +63,9 @@ const RestorePointModal = props => (
                 <button
                     onClick={props.onClickDeleteAll}
                     className={classNames(styles.button, styles.deleteAllButton)}
-                    disabled={props.isLoading || props.error || props.restorePoints.length === 0}
+                    // This does a complete database reset, so it may still be useful even if there don't appear
+                    // to be any restore points.
+                    disabled={props.isLoading}
                 >
                     <FormattedMessage
                         defaultMessage="Delete All"

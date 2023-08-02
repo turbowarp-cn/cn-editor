@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import {FormattedMessage} from 'react-intl';
+import {FormattedMessage, FormattedDate, FormattedTime} from 'react-intl';
 import bindAll from 'lodash.bindall';
 import styles from './restore-point-modal.css';
 import RestorePointAPI from '../../lib/tw-restore-point-api';
@@ -23,11 +23,6 @@ class RestorePoint extends React.Component {
         this.props.onClickLoad(this.props.id);
     }
 
-    formatDate () {
-        // TODO: react-intl should have a proper way to do this?
-        return new Date(this.props.created * 1000).toLocaleString();
-    }
-
     formatSize () {
         const size = this.props.size;
         if (size < 1024 * 1024) {
@@ -37,6 +32,7 @@ class RestorePoint extends React.Component {
     }
 
     render () {
+        const createdDate = new Date(this.props.created * 1000);
         return (
             <div
                 tabIndex={0}
@@ -62,7 +58,9 @@ class RestorePoint extends React.Component {
                     </div>
                     <div>
                         <span className={styles.restorePointDate}>
-                            {this.formatDate()}
+                            <FormattedTime value={createdDate} />
+                            {', '}
+                            <FormattedDate value={createdDate} />
                         </span>
                         {', '}
                         <span className={styles.restorePointSize}>
