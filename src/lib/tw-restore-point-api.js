@@ -1,21 +1,5 @@
 import JSZip from 'jszip';
-
-// TODO
-/*
-const deleteLegacyData = () => {
-    try {
-        if (typeof indexedDB !== 'undefined') {
-            const request = indexedDB.deleteDatabase('TW_AutoSave');
-            request.onerror = () => {
-                log.error('Error deleting legacy restore point data');
-            };
-        }
-    } catch (e) {
-        log.error('Error deleting legacy restore point data', e);
-    }
-};
-deleteLegacyData();
-*/
+import {base64ToArrayBuffer} from './tw-base64-utils';
 
 const TYPE_AUTOMATIC = 0;
 const TYPE_MANUAL = 1;
@@ -30,6 +14,8 @@ const TYPE_MANUAL = 1;
  * @property {number} created Unix seconds
  * @property {Type} type
  * @property {number} size in bytes
+ * @property {number} thumbnailWidth
+ * @property {number} thumbnailHeight
  * @property {string[]} assets md5exts
  */
 
@@ -38,6 +24,8 @@ const DATABASE_VERSION = 2;
 const METADATA_STORE = 'meta';
 const PROJECT_STORE = 'projects';
 const ASSET_STORE = 'assets';
+const THUMBNAIL_STORE = 'thumbnails';
+const ALL_STORES = [METADATA_STORE, PROJECT_STORE, ASSET_STORE, THUMBNAIL_STORE];
 
 const MAX_AUTOMATIC_RESTORE_POINTS = 5;
 
@@ -66,6 +54,7 @@ const openDB = () => {
             });
             db.createObjectStore(PROJECT_STORE);
             db.createObjectStore(ASSET_STORE);
+            db.createObjectStore(THUMBNAIL_STORE);
         };
 
         request.onsuccess = () => {
@@ -94,6 +83,8 @@ const parseMetadata = obj => {
     obj.type = [TYPE_AUTOMATIC, TYPE_MANUAL].includes(obj.type) ? obj.type : 1;
     obj.assets = Array.isArray(obj.assets) ? obj.assets : [];
     obj.assets = obj.assets.filter(i => typeof i === 'string');
+    obj.thumbnailWidth = typeof obj.thumbnailWidth === 'number' ? obj.thumbnailWidth : 480;
+    obj.thumbnailHeight = typeof obj.thumbnailHeight === 'number' ? obj.thumbnailHeight : 360;
     return obj;
 };
 
@@ -130,6 +121,7 @@ const removeExtraneousData = transaction => new Promise(resolve => {
     const metadataStore = transaction.objectStore(METADATA_STORE);
     const projectStore = transaction.objectStore(PROJECT_STORE);
     const assetStore = transaction.objectStore(ASSET_STORE);
+    const thumbnailStore = transaction.objectStore(THUMBNAIL_STORE);
 
     const requiredProjects = new Set();
     const requiredAssetIDs = new Set();
@@ -147,6 +139,7 @@ const removeExtraneousData = transaction => new Promise(resolve => {
         } else {
             deleteUnknownKeys(projectStore, requiredProjects)
                 .then(() => deleteUnknownKeys(assetStore, requiredAssetIDs))
+                .then(() => deleteUnknownKeys(thumbnailStore, requiredProjects))
                 .then(() => resolve());
         }
     };
@@ -156,47 +149,53 @@ const removeExtraneousData = transaction => new Promise(resolve => {
  * @returns {Promise<void>} Resolves when extraneous restore points have been removed.
  */
 const removeExtraneousRestorePoints = () => openDB().then(db => new Promise((resolveTransaction, rejectTransaction) => {
-    const transaction = db.transaction([METADATA_STORE, PROJECT_STORE, ASSET_STORE], 'readwrite');
+    const transaction = db.transaction(ALL_STORES, 'readwrite');
     transaction.onerror = () => {
         rejectTransaction(new Error(`Transaction error: ${transaction.error}`));
     };
 
-    const metadataStore = transaction.objectStore(METADATA_STORE);
-    const projectsToDelete = [];
     let automaticCount = 0;
 
-    const deleteProjects = async () => {
-        for (const key of projectsToDelete) {
-            await new Promise(resolve => {
-                const deleteRequest = metadataStore.delete(key);
-                deleteRequest.onsuccess = () => {
-                    resolve();
-                };
-            });
-        }
-
-        removeExtraneousData(transaction)
-            .then(() => resolveTransaction());
-    };
-
+    const metadataStore = transaction.objectStore(METADATA_STORE);
     const getRequest = metadataStore.openCursor(null, 'prev');
     getRequest.onsuccess = () => {
         const cursor = getRequest.result;
         if (cursor) {
             const manifest = parseMetadata(cursor.value);
             if (manifest.type === TYPE_AUTOMATIC) {
-                if (automaticCount <= MAX_AUTOMATIC_RESTORE_POINTS) {
-                    automaticCount++;
-                } else {
-                    projectsToDelete.push(cursor.key);
+                automaticCount++;
+                if (automaticCount > MAX_AUTOMATIC_RESTORE_POINTS) {
+                    cursor.delete();
                 }
             }
             cursor.continue();
         } else {
-            deleteProjects();
+            removeExtraneousData(transaction)
+                .then(() => resolveTransaction());
         }
     };
 }));
+
+// eslint-disable-next-line valid-jsdoc
+/**
+ * @param {VirtualMachine} vm scratch-vm instance
+ * @returns {Promise<{type: string; data: ArrayBuffer;}>} Thumbnail data
+ */
+const generateThumbnail = vm => new Promise(resolve => {
+    vm.renderer.requestSnapshot(dataURL => {
+        const index = dataURL.indexOf(',');
+        const base64 = dataURL.substring(index + 1);
+        const arrayBuffer = base64ToArrayBuffer(base64);
+        const type = 'image/png';
+        resolve({
+            type,
+            data: arrayBuffer
+        });
+    });
+
+    // Force the snapshot to be processed immediately, even if the project is not running yet.
+    vm.renderer.draw();
+});
 
 /**
  * @param {VirtualMachine} vm scratch-vm instance
@@ -204,7 +203,11 @@ const removeExtraneousRestorePoints = () => openDB().then(db => new Promise((res
  * @param {MetadataType} type restore point type
  * @returns {Promise<void>} resolves when the restore point is created
  */
-const createRestorePoint = (vm, title, type) => openDB().then(db => {
+const createRestorePoint = (
+    vm,
+    title,
+    type
+) => openDB().then(db => new Promise((resolveTransaction, rejectTransaction) => {
     /** @type {Record<string, Uint8Array>} */
     const projectFiles = vm.saveProjectSb3DontZip();
     const projectAssetIDs = Object.keys(projectFiles)
@@ -214,13 +217,23 @@ const createRestorePoint = (vm, title, type) => openDB().then(db => {
         throw new Error('There are no assets in this project');
     }
 
-    const transaction = db.transaction([METADATA_STORE, PROJECT_STORE, ASSET_STORE], 'readwrite');
-    return new Promise((resolveTransaction, rejectTransaction) => {
+    generateThumbnail(vm).then(thumbnailData => {
+        const transaction = db.transaction(ALL_STORES, 'readwrite');
         transaction.onerror = () => {
             rejectTransaction(new Error(`Transaction error: ${transaction.error}`));
         };
 
+        // Will be generated by database
+        /** @type {IDBValidKey} */
         let generatedId = null;
+
+        const writeThumbnail = () => {
+            const thumbnailStore = transaction.objectStore(THUMBNAIL_STORE);
+            const request = thumbnailStore.add(thumbnailData, generatedId);
+            request.onsuccess = () => {
+                resolveTransaction();
+            };
+        };
 
         const writeMissingAssets = async missingAssets => {
             const assetStore = transaction.objectStore(ASSET_STORE);
@@ -235,7 +248,7 @@ const createRestorePoint = (vm, title, type) => openDB().then(db => {
                 });
             }
 
-            resolveTransaction();
+            writeThumbnail();
         };
 
         const checkMissingAssets = () => {
@@ -269,6 +282,8 @@ const createRestorePoint = (vm, title, type) => openDB().then(db => {
                 created: Math.round(Date.now() / 1000),
                 type,
                 size,
+                thumbnailWidth: vm.runtime.stageWidth,
+                thumbnailHeight: vm.runtime.stageHeight,
                 assets: projectAssetIDs
             };
 
@@ -282,14 +297,14 @@ const createRestorePoint = (vm, title, type) => openDB().then(db => {
 
         writeMetadata();
     });
-});
+}));
 
 /**
  * @param {number} id the restore point's ID
  * @returns {Promise<void>} Resovles when the restore point has been deleted.
  */
 const deleteRestorePoint = id => openDB().then(db => new Promise((resolve, reject) => {
-    const transaction = db.transaction([METADATA_STORE, PROJECT_STORE, ASSET_STORE], 'readwrite');
+    const transaction = db.transaction(ALL_STORES, 'readwrite');
     transaction.onerror = () => {
         reject(new Error(`Transaction error: ${transaction.error}`));
     };
@@ -303,19 +318,30 @@ const deleteRestorePoint = id => openDB().then(db => new Promise((resolve, rejec
 }));
 
 /**
- * @returns {Promise<void>} Resolves when the database has been deleted.
+ * @returns {Promise<void>} Resolves when all data in the database has been deleted.
  */
-const deleteAllRestorePoints = () => new Promise((resolve, reject) => {
-    _cachedDB = null;
+const deleteAllRestorePoints = () => openDB().then(db => new Promise((resolveTransaction, rejectTransaction) => {
+    const transaction = db.transaction(ALL_STORES, 'readwrite');
+    transaction.onerror = () => {
+        rejectTransaction(new Error(`Transaction error: ${transaction.error}`));
+    };
 
-    const request = indexedDB.deleteDatabase(DATABASE_NAME);
-    request.onerror = () => {
-        reject(new Error(`Database error: ${request.error}`));
+    const deleteEverything = async () => {
+        for (const storeName of ALL_STORES) {
+            await new Promise(resolve => {
+                const store = transaction.objectStore(storeName);
+                const request = store.clear();
+                request.onsuccess = () => {
+                    resolve();
+                };
+            });
+        }
+
+        resolveTransaction();
     };
-    request.onsuccess = () => {
-        resolve();
-    };
-});
+
+    deleteEverything();
+}));
 
 /**
  * @param {number} id the restore point's ID
@@ -404,6 +430,47 @@ const getAllRestorePoints = () => openDB().then(db => new Promise((resolve, reje
     };
 }));
 
+/**
+ * @param {number} id restore point's ID
+ * @returns {Promise<string>} The URL to load
+ */
+const getThumbnail = id => openDB().then(db => new Promise((resolve, reject) => {
+    const transaction = db.transaction([THUMBNAIL_STORE], 'readonly');
+    transaction.onerror = () => {
+        reject(new Error(`Transaction error: ${transaction.error}`));
+    };
+
+    const thumbnailStore = transaction.objectStore(THUMBNAIL_STORE);
+    const request = thumbnailStore.get(id);
+    request.onsuccess = () => {
+        const thumbnail = request.result;
+        if (!thumbnail) {
+            reject(new Error('No thumbnail found'));
+            return;
+        }
+
+        const blob = new Blob([thumbnail.data], {
+            type: thumbnail.type
+        });
+        const url = URL.createObjectURL(blob);
+        resolve(url);
+    };
+}));
+
+// We will enable this after a couple days
+/*
+const deleteLegacyData = () => {
+    try {
+        if (typeof indexedDB !== 'undefined') {
+            const _request = indexedDB.deleteDatabase('TW_AutoSave');
+            // don't really care what happens to the request at this point
+        }
+    } catch (e) {
+        // ignore
+    }
+};
+*/
+
 const loadLegacyRestorePoint = () => new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
         reject(new Error('indexedDB not supported'));
@@ -460,6 +527,7 @@ export default {
     removeExtraneousRestorePoints,
     deleteRestorePoint,
     deleteAllRestorePoints,
+    getThumbnail,
     loadRestorePoint,
     loadLegacyRestorePoint
 };

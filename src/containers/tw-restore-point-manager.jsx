@@ -3,7 +3,7 @@ import {connect} from 'react-redux';
 import {intlShape, injectIntl, defineMessages} from 'react-intl';
 import PropTypes from 'prop-types';
 import bindAll from 'lodash.bindall';
-import {closeAlertWithId, showStandardAlert} from '../reducers/alerts';
+import {showAlertWithTimeout, showStandardAlert} from '../reducers/alerts';
 import {closeLoadingProject, closeRestorePointModal, openLoadingProject} from '../reducers/modals';
 import {LoadingStates, getIsShowingProject, onLoadedProject, requestProjectUpload} from '../reducers/project-state';
 import {setFileHandle} from '../reducers/tw';
@@ -14,11 +14,14 @@ import log from '../lib/log';
 /* eslint-disable no-alert */
 
 const AUTOMATIC_INTERVAL = 1000 * 5; // TODO: increase this when testing is done
-const MINIMUM_SAVE_TIME = 500;
+const SAVE_DELAY = 250;
+const MINIMUM_SAVE_TIME = 750;
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const messages = defineMessages({
     confirmLoad: {
-        defaultMessage: 'Replace existing project?',
+        defaultMessage: 'You have unsaved changes. Replace existing project?',
         description: 'Confirmation that appears when loading a restore point to confirm overwriting unsaved changes.',
         id: 'tw.restorePoints.confirmLoad'
     },
@@ -52,6 +55,12 @@ class TWRestorePointManager extends React.Component {
         this.timeout = null;
     }
 
+    componentDidMount () {
+        if (this.shouldBeAutosaving()) {
+            this.queueRestorePoint();
+        }
+    }
+
     componentWillReceiveProps (nextProps) {
         if (nextProps.isModalVisible && !this.props.isModalVisible) {
             this.refreshState();
@@ -67,11 +76,9 @@ class TWRestorePointManager extends React.Component {
             this.props.projectChanged !== prevProps.projectChanged ||
             this.props.isShowingProject !== prevProps.isShowingProject
         ) {
-            if (this.props.projectChanged && this.props.isShowingProject) {
+            if (this.shouldBeAutosaving()) {
                 // Project was modified
-                if (!this.timeout) {
-                    this.queueRestorePoint();
-                }
+                this.queueRestorePoint();
             } else {
                 // Project was saved
                 clearTimeout(this.timeout);
@@ -82,6 +89,11 @@ class TWRestorePointManager extends React.Component {
 
     componentWillUnmount () {
         clearTimeout(this.timeout);
+        this.timeout = null;
+    }
+
+    shouldBeAutosaving () {
+        return this.props.projectChanged && this.props.isShowingProject;
     }
 
     handleClickCreate () {
@@ -135,8 +147,19 @@ class TWRestorePointManager extends React.Component {
         this.props.onFinishLoadingRestorePoint(success, this.props.loadingState);
     }
 
-    handleClickLoad (id) {
+    canLoadProject () {
+        if (!this.props.isShowingProject) {
+            // Loading a project now will break the state machine
+            return false;
+        }
         if (this.props.projectChanged && !confirm(this.props.intl.formatMessage(messages.confirmLoad))) {
+            return false;
+        }
+        return true;
+    }
+
+    handleClickLoad (id) {
+        if (!this.canLoadProject()) {
             return;
         }
         this._startLoading();
@@ -152,7 +175,7 @@ class TWRestorePointManager extends React.Component {
     }
 
     handleClickLoadLegacy () {
-        if (this.props.projectChanged && !confirm(this.props.intl.formatMessage(messages.confirmLoad))) {
+        if (!this.canLoadProject()) {
             return;
         }
         this._startLoading();
@@ -169,11 +192,14 @@ class TWRestorePointManager extends React.Component {
     }
 
     queueRestorePoint () {
+        if (this.timeout) {
+            return;
+        }
         this.timeout = setTimeout(() => {
             this.createRestorePoint(RestorePointAPI.TYPE_AUTOMATIC).then(() => {
                 this.timeout = null;
 
-                if (this.props.projectChanged && this.props.isShowingProject) {
+                if (this.shouldBeAutosaving()) {
                     // Project is still not saved
                     this.queueRestorePoint();
                 }
@@ -190,12 +216,14 @@ class TWRestorePointManager extends React.Component {
 
         this.props.onStartCreatingRestorePoint();
         return Promise.all([
-            RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle, type)
+            // Wait a little bit before saving so UI can update before saving, which can cause stutter
+            sleep(SAVE_DELAY)
+                .then(() => RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle, type))
                 .then(() => RestorePointAPI.removeExtraneousRestorePoints()),
 
             // Force saves to not be instant so people can see that we're making a restore point
             // It also makes refreshes less likely to cause accidental clicks in the modal
-            new Promise(resolve => setTimeout(resolve, MINIMUM_SAVE_TIME))
+            sleep(MINIMUM_SAVE_TIME)
         ])
             .then(() => {
                 if (this.props.isModalVisible) {
@@ -279,7 +307,7 @@ const mapStateToProps = state => ({
 
 const mapDispatchToProps = dispatch => ({
     onStartCreatingRestorePoint: () => dispatch(showStandardAlert('twCreatingRestorePoint')),
-    onFinishCreatingRestorePoint: () => dispatch(closeAlertWithId('twCreatingRestorePoint')),
+    onFinishCreatingRestorePoint: () => showAlertWithTimeout(dispatch, 'twRestorePointSuccess'),
     onStartLoadingRestorePoint: loadingState => {
         dispatch(openLoadingProject());
         dispatch(requestProjectUpload(loadingState));

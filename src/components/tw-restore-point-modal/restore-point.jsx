@@ -12,6 +12,30 @@ class RestorePoint extends React.Component {
             'handleClickDelete',
             'handleClickLoad'
         ]);
+        this.state = {
+            thumbnail: null
+        };
+        this.unmounted = false;
+    }
+
+    componentDidMount () {
+        RestorePointAPI.getThumbnail(this.props.id)
+            .then(url => {
+                if (this.unmounted) {
+                    URL.revokeObjectURL(url);
+                } else {
+                    this.setState({
+                        thumbnail: url
+                    });
+                }
+            });
+    }
+
+    componentWillUnmount () {
+        if (this.state.thumbnail) {
+            URL.revokeObjectURL(this.state.thumbnail);
+        }
+        this.unmounted = true;
     }
 
     handleClickDelete (e) {
@@ -25,10 +49,10 @@ class RestorePoint extends React.Component {
 
     formatSize () {
         const size = this.props.size;
-        if (size < 1024 * 1024) {
-            return `${(size / 1024).toFixed(2)}KB`;
+        if (size < 1000 * 1000) {
+            return `${(size / 1000).toFixed(2)}KB`;
         }
-        return `${(size / 1024 / 1024).toFixed(2)}MB`;
+        return `${(size / 1000 / 1000).toFixed(2)}MB`;
     }
 
     render () {
@@ -40,33 +64,48 @@ class RestorePoint extends React.Component {
                 className={styles.restorePoint}
                 onClick={this.handleClickLoad}
             >
+                <img
+                    className={styles.restorePointThumbnail}
+                    src={this.state.thumbnail}
+                    // This sets the image's aspect ratio. CSS is responsible for figuring out how to size it.
+                    width={this.props.thumbnailWidth}
+                    height={this.props.thumbnailHeight}
+                />
+
                 <div className={styles.restorePointDetails}>
-                    <div className={styles.restorePointTitleOuter}>
-                        <span className={styles.restorePointTitle}>
-                            {this.props.title}
-                        </span>
-                        {this.props.type === RestorePointAPI.TYPE_AUTOMATIC && (
-                            <span className={styles.restorePointType}>
-                                {' '}
-                                <FormattedMessage
-                                    defaultMessage="(Autosave)"
-                                    description="Indicates that a restore point was created automatically"
-                                    id="tw.restorePoints.autosave"
-                                />
-                            </span>
-                        )}
+                    <div className={styles.restorePointTitle}>
+                        {this.props.title}
                     </div>
+
                     <div>
-                        <span className={styles.restorePointDate}>
-                            <FormattedTime value={createdDate} />
-                            {', '}
-                            <FormattedDate value={createdDate} />
-                        </span>
+                        <FormattedDate value={createdDate} />
                         {', '}
-                        <span className={styles.restorePointSize}>
-                            {this.formatSize()}
-                        </span>
+                        <FormattedTime value={createdDate} />
                     </div>
+
+                    <div>
+                        {this.formatSize()}
+                        {', '}
+                        <FormattedMessage
+                            defaultMessage="{n} assets"
+                            // eslint-disable-next-line max-len
+                            description="Describes how many assets (costumes and images) are in a restore poins. {n} is replaced with a number like 406"
+                            id="tw.restorePoints.assets"
+                            values={{
+                                n: this.props.assets.length
+                            }}
+                        />
+                    </div>
+
+                    {this.props.type === RestorePointAPI.TYPE_AUTOMATIC && (
+                        <div>
+                            <FormattedMessage
+                                defaultMessage="Autosave"
+                                description="Indicates that a restore point was created automatically"
+                                id="tw.restorePoints.autosave"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 <button
@@ -86,6 +125,8 @@ RestorePoint.propTypes = {
     created: PropTypes.number.isRequired,
     type: PropTypes.oneOf([RestorePointAPI.TYPE_AUTOMATIC, RestorePointAPI.TYPE_MANUAL]).isRequired,
     size: PropTypes.number.isRequired,
+    thumbnailWidth: PropTypes.number.isRequired,
+    thumbnailHeight: PropTypes.number.isRequired,
     assets: PropTypes.arrayOf(PropTypes.string.isRequired).isRequired,
     onClickDelete: PropTypes.func.isRequired,
     onClickLoad: PropTypes.func.isRequired

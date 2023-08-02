@@ -23,20 +23,6 @@ const RestorePointModal = props => (
         id="restorePointModal"
     >
         <div className={styles.body}>
-            <div className={styles.legacyTransition}>
-                {/* Don't translate -- this will be removed before it can be meaningfully translated */}
-                <span>
-                    {/* eslint-disable-next-line max-len */}
-                    {'Restore points have been rewritten. If your project is not listed below, try loading the old restore point instead:'}
-                </span>
-                <button
-                    className={classNames(styles.button, styles.loadLegacyButton)}
-                    onClick={props.onClickLoadLegacy}
-                >
-                    {'Load Old'}
-                </button>
-            </div>
-
             <p>
                 <FormattedMessage
                     // eslint-disable-next-line max-len
@@ -47,33 +33,6 @@ const RestorePointModal = props => (
                     }}
                 />
             </p>
-
-            <div className={styles.buttonContainer}>
-                <button
-                    onClick={props.onClickCreate}
-                    className={classNames(styles.button, styles.createButton)}
-                    disabled={props.isLoading}
-                >
-                    <FormattedMessage
-                        defaultMessage="Create Restore Point"
-                        description="Button to create a manual restore point"
-                        id="tw.restorePoints.create"
-                    />
-                </button>
-                <button
-                    onClick={props.onClickDeleteAll}
-                    className={classNames(styles.button, styles.deleteAllButton)}
-                    // This does a complete database reset, so it may still be useful even if there don't appear
-                    // to be any restore points.
-                    disabled={props.isLoading}
-                >
-                    <FormattedMessage
-                        defaultMessage="Delete All"
-                        description="Button to delete all restore points"
-                        id="tw.restorePoints.deleteAll"
-                    />
-                </button>
-            </div>
 
             {props.error ? (
                 <div className={styles.error}>
@@ -100,23 +59,56 @@ const RestorePointModal = props => (
                     />
                 </div>
             ) : props.restorePoints.length === 0 ? (
-                <div className={styles.empty}>
-                    <FormattedMessage
-                        defaultMessage="No restore points."
-                        description="Message that appears when no restore points exist yet"
-                        id="tw.restorePoints.empty"
-                    />
+                <div>
+                    <div className={styles.empty}>
+                        <FormattedMessage
+                            defaultMessage="No restore points found."
+                            description="Message that appears when no restore points exist yet"
+                            id="tw.restorePoints.empty"
+                        />
+                    </div>
+
+                    <div className={styles.legacyTransition}>
+                        {/* This is going away within a few days */}
+                        {/* No reason to bother translating */}
+                        <span>
+                            {/* eslint-disable-next-line max-len */}
+                            {'We just rewrote restore points from the ground up. If you were expecting to find a project here, try loading the old restore point:'}
+                        </span>
+                        <button
+                            className={classNames(styles.button, styles.loadLegacyButton)}
+                            onClick={props.onClickLoadLegacy}
+                        >
+                            {'Load'}
+                        </button>
+                    </div>
                 </div>
             ) : (
-                <div className={styles.restorePointContainer}>
-                    {props.restorePoints.map(restorePoint => (
-                        <RestorePoint
-                            key={restorePoint.id}
-                            onClickDelete={props.onClickDelete}
-                            onClickLoad={props.onClickLoad}
-                            {...restorePoint}
-                        />
-                    ))}
+                <div>
+                    <div className={styles.restorePointContainer}>
+                        {props.restorePoints.map(restorePoint => (
+                            <RestorePoint
+                                key={restorePoint.id}
+                                onClickDelete={props.onClickDelete}
+                                onClickLoad={props.onClickLoad}
+                                {...restorePoint}
+                            />
+                        ))}
+                    </div>
+
+                    <div className={styles.buttonContainer}>
+                        <button
+                            onClick={props.onClickDeleteAll}
+                            className={classNames(styles.button, styles.deleteAllButton)}
+                            disabled={props.isLoading}
+                        >
+                            <FormattedMessage
+                                defaultMessage="Delete All"
+                                description="Button to delete all restore points"
+                                id="tw.restorePoints.deleteAll"
+                            />
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

@@ -198,6 +198,22 @@ const alerts = [
         level: AlertLevels.INFO
     },
     {
+        alertId: 'twRestorePointSuccess',
+        alertType: AlertTypes.INLINE,
+        clearList: ['twCreatingRestorePoint'],
+        content: (
+            <FormattedMessage
+                defaultMessage="Access restore points in &quot;File&quot;"
+                // eslint-disable-next-line max-len
+                description="Message indicating that a restore point was successfully created. File refers to the file dropdown menu."
+                id="tw.alerts.restorePointSuccess"
+            />
+        ),
+        iconURL: successImage,
+        level: AlertLevels.SUCCESS,
+        maxDisplaySecs: 3
+    },
+    {
         alertId: 'cloudInfo',
         alertType: AlertTypes.STANDARD,
         clearList: ['cloudInfo'],
