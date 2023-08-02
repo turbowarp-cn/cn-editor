@@ -275,6 +275,7 @@ const createRestorePoint = (
             for (const data of Object.values(projectFiles)) {
                 size += data.byteLength;
             }
+            size += thumbnailData.data.byteLength;
 
             /** @type {Metadata} */
             const metadata = {
