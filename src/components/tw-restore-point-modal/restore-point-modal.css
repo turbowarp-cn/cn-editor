@@ -79,13 +79,19 @@
     display: flex;
     flex-direction: column;
 }
+.restore-point-title-outer {
+
+}
 .restore-point-title {
     font-weight: bold;
+}
+.restore-point-type {
+
 }
 .restore-point-date {
 
 }
-.restore-point-assets {
+.restore-point-size {
 
 }
 

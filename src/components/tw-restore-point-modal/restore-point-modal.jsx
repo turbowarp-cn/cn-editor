@@ -112,10 +112,7 @@ const RestorePointModal = props => (
                             key={restorePoint.id}
                             onClickDelete={props.onClickDelete}
                             onClickLoad={props.onClickLoad}
-                            id={restorePoint.id}
-                            title={restorePoint.title}
-                            assets={restorePoint.assets}
-                            created={restorePoint.created}
+                            {...restorePoint}
                         />
                     ))}
                 </div>

@@ -17,10 +17,19 @@ const deleteLegacyData = () => {
 deleteLegacyData();
 */
 
+const TYPE_AUTOMATIC = 0;
+const TYPE_MANUAL = 1;
+
+/**
+ * @typedef {0|1} MetadataType
+ */
+
 /**
  * @typedef Metadata
  * @property {string} title
  * @property {number} created Unix seconds
+ * @property {Type} type
+ * @property {number} size in bytes
  * @property {string[]} assets md5exts
  */
 
@@ -30,7 +39,6 @@ const METADATA_STORE = 'meta';
 const PROJECT_STORE = 'projects';
 const ASSET_STORE = 'assets';
 
-// TODO
 const MAX_AUTOMATIC_RESTORE_POINTS = 5;
 
 /** @type {IDBDatabase|null} */
@@ -83,6 +91,7 @@ const parseMetadata = obj => {
     }
     obj.title = typeof obj.title === 'string' ? obj.title : '?';
     obj.created = typeof obj.created === 'number' ? obj.created : 0;
+    obj.type = [TYPE_AUTOMATIC, TYPE_MANUAL].includes(obj.type) ? obj.type : 1;
     obj.assets = Array.isArray(obj.assets) ? obj.assets : [];
     obj.assets = obj.assets.filter(i => typeof i === 'string');
     return obj;
@@ -115,9 +124,9 @@ const deleteUnknownKeys = (objectStore, keysToKeep) => new Promise(resolve => {
 
 /**
  * @param {IDBTransaction} transaction readwrite transaction with access to all stores
- * @returns {Promise<void>} Resolves when files have finished being removed.
+ * @returns {Promise<void>} Resolves when data has finished being removed.
  */
-const removeExtraneousFiles = transaction => new Promise(resolve => {
+const removeExtraneousData = transaction => new Promise(resolve => {
     const metadataStore = transaction.objectStore(METADATA_STORE);
     const projectStore = transaction.objectStore(PROJECT_STORE);
     const assetStore = transaction.objectStore(ASSET_STORE);
@@ -144,15 +153,66 @@ const removeExtraneousFiles = transaction => new Promise(resolve => {
 });
 
 /**
+ * @returns {Promise<void>} Resolves when extraneous restore points have been removed.
+ */
+const removeExtraneousRestorePoints = () => openDB().then(db => new Promise((resolveTransaction, rejectTransaction) => {
+    const transaction = db.transaction([METADATA_STORE, PROJECT_STORE, ASSET_STORE], 'readwrite');
+    transaction.onerror = () => {
+        rejectTransaction(new Error(`Transaction error: ${transaction.error}`));
+    };
+
+    const metadataStore = transaction.objectStore(METADATA_STORE);
+    const projectsToDelete = [];
+    let automaticCount = 0;
+
+    const deleteProjects = async () => {
+        for (const key of projectsToDelete) {
+            await new Promise(resolve => {
+                const deleteRequest = metadataStore.delete(key);
+                deleteRequest.onsuccess = () => {
+                    resolve();
+                };
+            });
+        }
+
+        removeExtraneousData(transaction)
+            .then(() => resolveTransaction());
+    };
+
+    const getRequest = metadataStore.openCursor(null, 'prev');
+    getRequest.onsuccess = () => {
+        const cursor = getRequest.result;
+        if (cursor) {
+            const manifest = parseMetadata(cursor.value);
+            if (manifest.type === TYPE_AUTOMATIC) {
+                if (automaticCount <= MAX_AUTOMATIC_RESTORE_POINTS) {
+                    automaticCount++;
+                } else {
+                    projectsToDelete.push(cursor.key);
+                }
+            }
+            cursor.continue();
+        } else {
+            deleteProjects();
+        }
+    };
+}));
+
+/**
  * @param {VirtualMachine} vm scratch-vm instance
  * @param {string} title project title
+ * @param {MetadataType} type restore point type
  * @returns {Promise<void>} resolves when the restore point is created
  */
-const createRestorePoint = (vm, title) => openDB().then(db => {
+const createRestorePoint = (vm, title, type) => openDB().then(db => {
     /** @type {Record<string, Uint8Array>} */
     const projectFiles = vm.saveProjectSb3DontZip();
     const projectAssetIDs = Object.keys(projectFiles)
         .filter(i => i !== 'project.json');
+
+    if (projectAssetIDs.length === 0) {
+        throw new Error('There are no assets in this project');
+    }
 
     const transaction = db.transaction([METADATA_STORE, PROJECT_STORE, ASSET_STORE], 'readwrite');
     return new Promise((resolveTransaction, rejectTransaction) => {
@@ -168,7 +228,7 @@ const createRestorePoint = (vm, title) => openDB().then(db => {
                 await new Promise(resolveAsset => {
                     // TODO: should we insert arraybuffer or uint8array?
                     const assetDataArray = projectFiles[assetId];
-                    const request = assetStore.put(assetDataArray, assetId);
+                    const request = assetStore.add(assetDataArray, assetId);
                     request.onsuccess = () => {
                         resolveAsset();
                     };
@@ -198,10 +258,17 @@ const createRestorePoint = (vm, title) => openDB().then(db => {
         };
 
         const writeMetadata = () => {
+            let size = 0;
+            for (const data of Object.values(projectFiles)) {
+                size += data.byteLength;
+            }
+
             /** @type {Metadata} */
             const metadata = {
                 title,
                 created: Math.round(Date.now() / 1000),
+                type,
+                size,
                 assets: projectAssetIDs
             };
 
@@ -230,7 +297,7 @@ const deleteRestorePoint = id => openDB().then(db => new Promise((resolve, rejec
     const metadataStore = transaction.objectStore(METADATA_STORE);
     const request = metadataStore.delete(id);
     request.onsuccess = () => {
-        removeExtraneousFiles(transaction)
+        removeExtraneousData(transaction)
             .then(() => resolve());
     };
 }));
@@ -322,7 +389,7 @@ const getAllRestorePoints = () => openDB().then(db => new Promise((resolve, reje
     const restorePoints = [];
 
     const metadataStore = transaction.objectStore(METADATA_STORE);
-    const request = metadataStore.openCursor();
+    const request = metadataStore.openCursor(null, 'prev');
     request.onsuccess = () => {
         const cursor = request.result;
         if (cursor) {
@@ -386,8 +453,11 @@ const loadLegacyRestorePoint = () => new Promise((resolve, reject) => {
 });
 
 export default {
+    TYPE_AUTOMATIC,
+    TYPE_MANUAL,
     getAllRestorePoints,
     createRestorePoint,
+    removeExtraneousRestorePoints,
     deleteRestorePoint,
     deleteAllRestorePoints,
     loadRestorePoint,

@@ -85,7 +85,7 @@ class TWRestorePointManager extends React.Component {
     }
 
     handleClickCreate () {
-        this.createRestorePoint();
+        this.createRestorePoint(RestorePointAPI.TYPE_MANUAL);
     }
 
     handleClickDelete (id) {
@@ -167,7 +167,7 @@ class TWRestorePointManager extends React.Component {
 
     queueRestorePoint () {
         this.timeout = setTimeout(() => {
-            this.createRestorePoint().then(() => {
+            this.createRestorePoint(RestorePointAPI.TYPE_AUTOMATIC).then(() => {
                 this.timeout = null;
 
                 if (this.props.projectChanged && this.props.isShowingProject) {
@@ -178,7 +178,7 @@ class TWRestorePointManager extends React.Component {
         }, AUTOMATIC_INTERVAL);
     }
 
-    createRestorePoint () {
+    createRestorePoint (type) {
         if (this.props.isModalVisible) {
             this.setState({
                 loading: true
@@ -187,7 +187,8 @@ class TWRestorePointManager extends React.Component {
 
         this.props.onStartCreatingRestorePoint();
         return Promise.all([
-            RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle),
+            RestorePointAPI.createRestorePoint(this.props.vm, this.props.projectTitle, type)
+                .then(() => RestorePointAPI.removeExtraneousRestorePoints()),
 
             // Force saves to not be instant so people can see that we're making a restore point
             // It also makes refreshes less likely to cause accidental clicks in the modal
