@@ -227,7 +227,7 @@ export default [
                 id="tw.extensionGallery.name"
             />
         ),
-        href: 'https://extensions.turbowarp.org/',
+        href: 'https://extensions.turbowarp.cn/',
         extensionId: '',
         iconURL: galleryIcon,
         description: (
