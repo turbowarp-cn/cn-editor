@@ -29,7 +29,6 @@ import TWStateManagerHOC from '../lib/tw-state-manager-hoc.jsx';
 import TWThemeHOC from '../lib/tw-theme-hoc.jsx';
 import SBFileUploaderHOC from '../lib/sb-file-uploader-hoc.jsx';
 import TWPackagerIntegrationHOC from '../lib/tw-packager-integration-hoc.jsx';
-import TWRestorePointHOC from '../lib/tw-restore-point-hoc.jsx';
 import SettingsStore from '../addons/settings-store-singleton';
 import '../lib/tw-fix-history-api';
 import GUI from './render-gui.jsx';
@@ -44,6 +43,7 @@ import {isRendererSupported, isBrowserSupported} from '../lib/tw-environment-sup
 import AddonChannels from '../addons/channels';
 import {loadServiceWorker} from './load-service-worker';
 import runAddons from '../addons/entry';
+import {APP_NAME} from '../lib/brand';
 
 import styles from './interface.css';
 
@@ -262,7 +262,7 @@ class Interface extends React.Component {
                                 // eslint-disable-next-line max-len
                                 description.instructions === 'unshared' || description.credits === 'unshared'
                             ) && (
-                                <div className={styles.unsharedUpdate}>
+                                <div className={classNames(styles.infobox, styles.unsharedUpdate)}>
                                     <p>
                                         <FormattedMessage
                                             defaultMessage="Unshared projects are no longer visible."
@@ -321,6 +321,25 @@ class Interface extends React.Component {
                                 </div>
                             ) : null}
                             <div className={styles.section}>
+                                <p className={styles.infobox}>
+                                    <a
+                                        href={`${process.env.ROOT}august-2023-scratch-maintenance.html`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        {/* This will be here a few weeks, so we can translate it */}
+                                        <FormattedMessage
+                                            // eslint-disable-next-line max-len
+                                            defaultMessage="Upcoming Scratch maintenance may affect parts of {APP_NAME}"
+                                            // eslint-disable-next-line max-len
+                                            description="Temporary message with a link to learn about upcoming Scratch maintenance"
+                                            id="tw.aug23downtime"
+                                            values={{
+                                                APP_NAME
+                                            }}
+                                        />
+                                    </a>
+                                </p>
                                 <p>
                                     <FormattedMessage
                                         // eslint-disable-next-line max-len
@@ -385,7 +404,6 @@ const WrappedInterface = compose(
     TWProjectMetaFetcherHOC,
     TWStateManagerHOC,
     TWThemeHOC,
-    TWRestorePointHOC,
     TWPackagerIntegrationHOC
 )(ConnectedInterface);
 
