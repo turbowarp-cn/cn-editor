@@ -25,20 +25,9 @@ import gdxforConnectionIconURL from './gdxfor/gdxfor-illustration.svg';
 import gdxforConnectionSmallIconURL from './gdxfor/gdxfor-small.svg';
 
 import twIcon from './tw/tw.svg';
-
 import customExtensionIcon from './custom/custom.svg';
-
-// eslint-disable-next-line no-unused-vars
-import unknownIcon from './gallery/unknown.svg';
-import galleryIcon from './gallery/gallery.svg';
 import returnIcon from './custom/return.svg';
-
-const galleryItem = object => ({
-    ...object,
-    tags: ['tw'],
-    incompatibleWithScratch: true,
-    featured: true
-});
+import galleryIcon from './gallery/gallery.svg';
 
 export default [
     {
@@ -222,29 +211,6 @@ export default [
     {
         name: (
             <FormattedMessage
-                defaultMessage="TurboWarp Extension Gallery"
-                description="Name of extensions.turbowarp.org in extension library"
-                id="tw.extensionGallery.name"
-            />
-        ),
-        href: 'https://extensions.turbowarp.cn/',
-        extensionId: '',
-        iconURL: galleryIcon,
-        description: (
-            <FormattedMessage
-                // eslint-disable-next-line max-len
-                defaultMessage="We list many extensions here for convenience. You can find even more on extensions.turbowarp.org."
-                description="Description of extensions.turbowarp.org in extension library"
-                id="tw.extensionGallery.description"
-            />
-        ),
-        tags: ['tw'],
-        incompatibleWithScratch: true,
-        featured: true
-    },
-    {
-        name: (
-            <FormattedMessage
                 defaultMessage="TurboWarp Blocks"
                 description="Name of TW extension"
                 id="tw.twExtension.name"
@@ -271,7 +237,7 @@ export default [
                 id="tw.customExtension.name"
             />
         ),
-        extensionId: '',
+        extensionId: 'custom_extension',
         iconURL: customExtensionIcon,
         description: (
             <FormattedMessage
@@ -281,7 +247,76 @@ export default [
             />
         ),
         tags: ['tw'],
-        incompatibleWithScratch: true,
         featured: true
+        // Not marked as incompatible with Scratch so that clicking on it doesn't show a prompt
     }
 ];
+
+export const galleryLoading = {
+    name: (
+        <FormattedMessage
+            defaultMessage="TurboWarp Extension Gallery"
+            description="Name of extensions.turbowarp.org in extension library"
+            id="tw.extensionGallery.name"
+        />
+    ),
+    href: 'https://extensions.turbowarp.org/',
+    extensionId: 'gallery',
+    iconURL: galleryIcon,
+    description: (
+        <FormattedMessage
+            // eslint-disable-next-line max-len
+            defaultMessage="Loading extension gallery..."
+            description="Appears while loading extension list from the custom extension gallery"
+            id="tw.extensionGallery.loading"
+        />
+    ),
+    tags: ['tw'],
+    featured: true
+};
+
+export const galleryMore = {
+    name: (
+        <FormattedMessage
+            defaultMessage="TurboWarp Extension Gallery"
+            description="Name of extensions.turbowarp.org in extension library"
+            id="tw.extensionGallery.name"
+        />
+    ),
+    href: 'https://extensions.turbowarp.org/',
+    extensionId: 'gallery',
+    iconURL: galleryIcon,
+    description: (
+        <FormattedMessage
+            // eslint-disable-next-line max-len
+            defaultMessage="Learn more about extensions at extensions.turbowarp.org."
+            description="Appears after the extension list from the gallery was loaded successfully"
+            id="tw.extensionGallery.more"
+        />
+    ),
+    tags: ['tw'],
+    featured: true
+};
+
+export const galleryError = {
+    name: (
+        <FormattedMessage
+            defaultMessage="TurboWarp Extension Gallery"
+            description="Name of extensions.turbowarp.org in extension library"
+            id="tw.extensionGallery.name"
+        />
+    ),
+    href: 'https://extensions.turbowarp.org/',
+    extensionId: 'gallery',
+    iconURL: galleryIcon,
+    description: (
+        <FormattedMessage
+            // eslint-disable-next-line max-len
+            defaultMessage="Error loading extension gallery. Visit extensions.turbowarp.org to find more extensions."
+            description="Appears when an error occurred loading extension list from the custom extension gallery"
+            id="tw.extensionGallery.error"
+        />
+    ),
+    tags: ['tw'],
+    featured: true
+};

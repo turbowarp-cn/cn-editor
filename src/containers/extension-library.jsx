@@ -5,7 +5,11 @@ import VM from 'scratch-vm';
 import {defineMessages, injectIntl, intlShape} from 'react-intl';
 import log from '../lib/log';
 
-import extensionLibraryContent from '../lib/libraries/extensions/index.jsx';
+import extensionLibraryContent, {
+    galleryError,
+    galleryLoading,
+    galleryMore
+} from '../lib/libraries/extensions/index.jsx';
 import extensionTags from '../lib/libraries/tw-extension-tags';
 
 import LibraryComponent from '../components/library/library.jsx';
@@ -16,14 +20,60 @@ const messages = defineMessages({
         defaultMessage: 'Choose an Extension',
         description: 'Heading for the extension library',
         id: 'gui.extensionLibrary.chooseAnExtension'
-    },
-    incompatible: {
-        // eslint-disable-next-line max-len
-        defaultMessage: 'This extension is incompatible with Scratch. Projects made with it cannot be uploaded to the Scratch website. Are you sure you want to enable it?',
-        description: 'Confirm loading Scratch-incompatible extension',
-        id: 'tw.confirmIncompatibleExtension'
     }
 });
+
+const toLibraryItem = extension => {
+    if (typeof extension === 'object') {
+        return ({
+            rawURL: extension.iconURL || extensionIcon,
+            ...extension
+        });
+    }
+    return extension;
+};
+
+let cachedGallery = null;
+
+const fetchLibrary = async () => {
+    const res = await fetch('https://extensions.turbowarp.org/generated-metadata/extensions-v0.json');
+    if (!res.ok) {
+        throw new Error(`HTTP status ${res.status}`);
+    }
+    const data = await res.json();
+    return data.extensions.map(extension => ({
+        name: extension.name,
+        description: extension.description,
+        extensionId: extension.id,
+        extensionURL: `https://extensions.turbowarp.org/${extension.slug}.js`,
+        iconURL: `https://extensions.turbowarp.org/${extension.image || 'images/unknown.svg'}`,
+        tags: ['tw'],
+        credits: [
+            ...(extension.by || []),
+            ...(extension.original || [])
+        ].map(credit => {
+            if (credit.link) {
+                return (
+                    <a
+                        href={credit.link}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        {credit.name}
+                    </a>
+                );
+            }
+            return credit.name;
+        }),
+        docsURI: extension.docs ? `https://extensions.turbowarp.org/${extension.slug}` : null,
+        samples: extension.samples ? extension.samples.map(sample => ({
+            href: `${process.env.ROOT}editor?project_url=https://extensions.turbowarp.org/samples/${encodeURIComponent(sample)}.sb3`,
+            text: sample
+        })) : null,
+        incompatibleWithScratch: true,
+        featured: true
+    }));
+};
 
 class ExtensionLibrary extends React.PureComponent {
     constructor (props) {
@@ -31,6 +81,36 @@ class ExtensionLibrary extends React.PureComponent {
         bindAll(this, [
             'handleItemSelect'
         ]);
+        this.state = {
+            gallery: cachedGallery,
+            galleryError: null,
+            galleryTimedOut: false
+        };
+    }
+    componentDidMount () {
+        if (!this.state.gallery) {
+            const timeout = setTimeout(() => {
+                this.setState({
+                    galleryTimedOut: true
+                });
+            }, 750);
+
+            fetchLibrary()
+                .then(gallery => {
+                    cachedGallery = gallery;
+                    this.setState({
+                        gallery
+                    });
+                    clearTimeout(timeout);
+                })
+                .catch(error => {
+                    log.error(error);
+                    this.setState({
+                        galleryError: error
+                    });
+                    clearTimeout(timeout);
+                });
+        }
     }
     handleItemSelect (item) {
         if (item.href) {
@@ -39,15 +119,8 @@ class ExtensionLibrary extends React.PureComponent {
 
         const extensionId = item.extensionId;
 
-        // Don't warn about Scratch compatibility before showing modal
-        const isCustomURL = !item.disabled && !extensionId;
-        if (isCustomURL) {
+        if (extensionId === 'custom_extension') {
             this.props.onOpenCustomExtensionModal();
-            return;
-        }
-
-        // eslint-disable-next-line no-alert
-        if (item.incompatibleWithScratch && !confirm(this.props.intl.formatMessage(messages.incompatible))) {
             return;
         }
 
@@ -75,14 +148,25 @@ class ExtensionLibrary extends React.PureComponent {
         }
     }
     render () {
-        const extensionLibraryThumbnailData = extensionLibraryContent.map(extension => ({
-            rawURL: extension.iconURL || extensionIcon,
-            ...extension
-        }));
+        let library = null;
+        if (this.state.gallery || this.state.galleryError || this.state.galleryTimedOut) {
+            library = extensionLibraryContent.map(toLibraryItem);
+            library.push('---');
+            if (this.state.gallery) {
+                library.push(toLibraryItem(galleryMore));
+                library.push(...this.state.gallery.map(toLibraryItem));
+            } else if (this.state.galleryError) {
+                library.push(toLibraryItem(galleryError));
+            } else {
+                library.push(toLibraryItem(galleryLoading));
+            }
+        }
+
         return (
             <LibraryComponent
-                data={extensionLibraryThumbnailData}
-                filterable={false}
+                data={library}
+                filterable
+                persistableKey="extensionId"
                 id="extensionLibrary"
                 tags={extensionTags}
                 title={this.props.intl.formatMessage(messages.extensionTitle)}
