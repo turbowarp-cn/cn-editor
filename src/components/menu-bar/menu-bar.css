@@ -119,15 +119,15 @@
 }
 
 .feedback-link {
-    color: $motion-primary !important;
+    color: #ffffff;
     text-decoration: none;
 }
 [theme="dark"] .feedback-link {
-    color: $motion-primary-dark !important;
+    color: #ffffff;
 }
 
 .feedback-button {
-    background-color: $ui-white;
+    background-color: #0d8bf2;
     height: 34px;
 }
 

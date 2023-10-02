@@ -35,45 +35,45 @@ const toLibraryItem = extension => {
 
 let cachedGallery = null;
 
-const fetchLibrary = async () => {
-    const res = await fetch('https://extensions.turbowarp.org/generated-metadata/extensions-v0.json');
-    if (!res.ok) {
-        throw new Error(`HTTP status ${res.status}`);
-    }
-    const data = await res.json();
-    return data.extensions.map(extension => ({
-        name: extension.name,
-        description: extension.description,
-        extensionId: extension.id,
-        extensionURL: `https://extensions.turbowarp.org/${extension.slug}.js`,
-        iconURL: `https://extensions.turbowarp.org/${extension.image || 'images/unknown.svg'}`,
-        tags: ['tw'],
-        credits: [
-            ...(extension.by || []),
-            ...(extension.original || [])
-        ].map(credit => {
-            if (credit.link) {
-                return (
-                    <a
-                        href={credit.link}
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        {credit.name}
-                    </a>
-                );
-            }
-            return credit.name;
-        }),
-        docsURI: extension.docs ? `https://extensions.turbowarp.org/${extension.slug}` : null,
-        samples: extension.samples ? extension.samples.map(sample => ({
-            href: `${process.env.ROOT}editor?project_url=https://extensions.turbowarp.org/samples/${encodeURIComponent(sample)}.sb3`,
-            text: sample
-        })) : null,
-        incompatibleWithScratch: true,
-        featured: true
-    }));
-};
+// const fetchLibrary = async () => {
+//     const res = await fetch('https://extensions.turbowarp.org/generated-metadata/extensions-v0.json');
+//     if (!res.ok) {
+//         throw new Error(`HTTP status ${res.status}`);
+//     }
+//     const data = await res.json();
+//     return data.extensions.map(extension => ({
+//         name: extension.name,
+//         description: extension.description,
+//         extensionId: extension.id,
+//         extensionURL: `https://extensions.turbowarp.org/${extension.slug}.js`,
+//         iconURL: `https://extensions.turbowarp.org/${extension.image || 'images/unknown.svg'}`,
+//         tags: ['tw'],
+//         credits: [
+//             ...(extension.by || []),
+//             ...(extension.original || [])
+//         ].map(credit => {
+//             if (credit.link) {
+//                 return (
+//                     <a
+//                         href={credit.link}
+//                         target="_blank"
+//                         rel="noreferrer"
+//                     >
+//                         {credit.name}
+//                     </a>
+//                 );
+//             }
+//             return credit.name;
+//         }),
+//         docsURI: extension.docs ? `https://extensions.turbowarp.org/${extension.slug}` : null,
+//         samples: extension.samples ? extension.samples.map(sample => ({
+//             href: `${process.env.ROOT}editor?project_url=https://extensions.turbowarp.org/samples/${encodeURIComponent(sample)}.sb3`,
+//             text: sample
+//         })) : null,
+//         incompatibleWithScratch: true,
+//         featured: true
+//     }));
+// };
 
 class ExtensionLibrary extends React.PureComponent {
     constructor (props) {
@@ -95,21 +95,21 @@ class ExtensionLibrary extends React.PureComponent {
                 });
             }, 750);
 
-            fetchLibrary()
-                .then(gallery => {
-                    cachedGallery = gallery;
-                    this.setState({
-                        gallery
-                    });
-                    clearTimeout(timeout);
-                })
-                .catch(error => {
-                    log.error(error);
-                    this.setState({
-                        galleryError: error
-                    });
-                    clearTimeout(timeout);
-                });
+            // fetchLibrary()
+            //     .then(gallery => {
+            //         cachedGallery = gallery;
+            //         this.setState({
+            //             gallery
+            //         });
+            //         clearTimeout(timeout);
+            //     })
+            //     .catch(error => {
+            //         log.error(error);
+            //         this.setState({
+            //             galleryError: error
+            //         });
+            //         clearTimeout(timeout);
+            //     });
         }
     }
     handleItemSelect (item) {
@@ -151,14 +151,14 @@ class ExtensionLibrary extends React.PureComponent {
         let library = null;
         if (this.state.gallery || this.state.galleryError || this.state.galleryTimedOut) {
             library = extensionLibraryContent.map(toLibraryItem);
-            library.push('---');
+            // library.push('---');
             if (this.state.gallery) {
-                library.push(toLibraryItem(galleryMore));
-                library.push(...this.state.gallery.map(toLibraryItem));
+                // library.push(toLibraryItem(galleryMore));
+                // library.push(...this.state.gallery.map(toLibraryItem));
             } else if (this.state.galleryError) {
-                library.push(toLibraryItem(galleryError));
+                // library.push(toLibraryItem(galleryError));
             } else {
-                library.push(toLibraryItem(galleryLoading));
+                // library.push(toLibraryItem(galleryLoading));
             }
         }
 

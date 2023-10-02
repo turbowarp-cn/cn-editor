@@ -905,31 +905,33 @@ class MenuBar extends React.Component {
                             />
                         ) : []))}
                     </div>
-                    {/* tw: add a feedback button */}
+                    {/* tw: add a cn_ext button */}
                     <div className={styles.menuBarItem}>
                         <a
                             className={styles.feedbackLink}
-                            href="https://scratch.mit.edu/users/GarboMuffin/#comments"
-                            rel="noopener noreferrer"
-                            target="_blank"
+                            href="#"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                window.open('https://extensions.turbowarp.cn/?loadext=1', '_blank', 'width=900,height=600');
+                              }}
                         >
                             {/* todo: icon */}
                             <Button className={styles.feedbackButton}>
                                 <FormattedMessage
-                                    defaultMessage="TurboWarp Feedback"
-                                    description="Button to give feedback in the menu bar"
-                                    id="tw.feedbackButton"
+                                    defaultMessage="cn-ext"
+                                    description="load extension"
+                                    id="tw.cn_ext"
                                 />
                             </Button>
                         </a>
                     </div>
                 </div>
-
                 <div className={styles.accountInfoGroup}>
                     <div className={styles.menuBarItem}>
                         <TWSaveStatus />
                     </div>
                 </div>
+                
 
                 {aboutButton}
             </Box>

@@ -3439,6 +3439,7 @@
         "tw.featuredProjectsStudio": "在 Scratch 上查看工作室",
         "tw.feedback": "反馈与漏洞提交",
         "tw.feedbackButton": "TurboWarp 反馈",
+        "tw.cn_ext": "CN_Extension",
         "tw.fetch.title": "此项目想要连接该网站：",
         "tw.fileInput.none": "未选择文件。",
         "tw.fileInput.selected": "选择：{name}",
