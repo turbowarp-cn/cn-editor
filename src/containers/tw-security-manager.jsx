@@ -6,6 +6,8 @@ import bindAll from 'lodash.bindall';
 import SecurityManagerModal from '../components/tw-security-manager-modal/security-manager-modal.jsx';
 import SecurityModals from '../lib/tw-security-manager-constants';
 
+/* eslint-disable require-atomic-updates */
+
 /**
  * Set of extension URLs that the user has manually trusted to load unsandboxed.
  */
@@ -134,9 +136,10 @@ class TWSecurityManagerComponent extends React.Component {
     }
 
     componentDidMount () {
-        const securityManager = this.props.vm.extensionManager.securityManager;
+        const vmSecurityManager = this.props.vm.extensionManager.securityManager;
+        const propsSecurityManager = this.props.securityManager;
         for (const method of SECURITY_MANAGER_METHODS) {
-            securityManager[method] = this[method];
+            vmSecurityManager[method] = propsSecurityManager[method] || this[method];
         }
     }
 
@@ -407,7 +410,12 @@ TWSecurityManagerComponent.propTypes = {
                 }, {})
             ).isRequired
         }).isRequired
-    }).isRequired
+    }).isRequired,
+    securityManager: PropTypes.shape(Object.fromEntries(SECURITY_MANAGER_METHODS.map(i => [i, PropTypes.func])))
+};
+
+TWSecurityManagerComponent.defaultProps = {
+    securityManager: {}
 };
 
 const mapStateToProps = state => ({

@@ -1,12 +1,11 @@
 /* eslint-disable import/no-commonjs */
 
-const SansSerif = require('./NotoSans-Medium.ttf');
-const Serif = require('./SourceSerifPro-Regular.otf');
-const Handwriting = require('./handlee-regular.ttf');
-const Marker = require('./Knewave.ttf');
-const Curly = require('./Griffy-Regular.ttf');
-const Pixel = require('./Grand9K-Pixel.ttf');
-const Scratch = require('./Scratch.ttf');
+const SansSerif = require('./NotoSans-Medium.woff2');
+const Serif = require('./SourceSerifPro-Regular.woff2');
+const Handwriting = require('./handlee-regular.woff2');
+const Marker = require('./Knewave.woff2');
+const Curly = require('./Griffy-Regular.woff2');
+const Pixel = require('./Grand9K-Pixel.woff2');
 const log = require('../log').default;
 
 const fontSource = {
@@ -15,8 +14,7 @@ const fontSource = {
     'Handwriting': Handwriting,
     'Marker': Marker,
     'Curly': Curly,
-    'Pixel': Pixel,
-    'Scratch': Scratch
+    'Pixel': Pixel
 };
 
 const fontData = {};

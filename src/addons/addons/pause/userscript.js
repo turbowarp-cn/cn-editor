@@ -8,12 +8,23 @@ export default async function ({ addon, console, msg }) {
   img.draggable = false;
   img.title = msg("pause");
 
-  const setSrc = () => (img.src = addon.self.getResource((isPaused() ? "/play.svg" : "/pause.svg"))) /* rewritten by pull.js */;
+  const setSrc = () => {
+    img.src = addon.self.getResource((isPaused() ? "/play.svg" : "/pause.svg")) /* rewritten by pull.js */;
+    img.title = isPaused() ? msg("play") : msg("pause");
+  };
   img.addEventListener("click", () => setPaused(!isPaused()));
   addon.tab.displayNoneWhileDisabled(img);
   addon.self.addEventListener("disabled", () => setPaused(false));
   setSrc();
   onPauseChanged(setSrc);
+
+  document.addEventListener("keydown", function (e) {
+    // On macOS, option+x types ≈ and shift+option+x types ˛ pretty universally across keyboard layouts
+    if (e.altKey && (e.key.toLowerCase() === "x" || e.key === "≈" || e.key === "˛") && !addon.self.disabled) {
+      e.preventDefault();
+      setPaused(!isPaused());
+    }
+  });
 
   while (true) {
     await addon.tab.waitForElement("[class^='green-flag']", {
